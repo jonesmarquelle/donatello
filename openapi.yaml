@@ -1,0 +1,455 @@
+openapi: 3.0.3
+info:
+  title: HTTP Queue Producer API
+  description: API for queuing HTTP requests and retrieving their results
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+
+paths:
+#   /queue-request:
+#     post:
+#       summary: Queue a new HTTP request
+#       description: Takes an HTTP request and queues it for processing
+#       requestBody:
+#         required: true
+#         content:
+#           application/json:
+#             schema:
+#               $ref: '#/components/schemas/HTTPRequest'
+#       responses:
+#         '200':
+#           description: Request successfully queued
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   status:
+#                     type: string
+#                     example: queued
+#                   correlation_id:
+#                     type: string
+#                     format: uuid
+#                     example: "123e4567-e89b-12d3-a456-426614174000"
+#                   message:
+#                     type: string
+#                     example: "Request successfully queued"
+#         '500':
+#           description: Failed to queue request
+#           content:
+#             application/json:
+#               schema:
+#                 type: object
+#                 properties:
+#                   detail:
+#                     type: string
+#                     example: "Failed to queue request: Connection error"
+
+  /jobs:
+    post:
+      summary: Create a new job
+      operationId: createJob
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreate'
+      responses:
+        '201':
+          description: Job created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+    
+  /jobs/{jobId}:
+    get:
+      summary: Get job details
+      operationId: getJob
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Job details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          description: Job not found
+    
+    put:
+      summary: Update job status
+      operationId: updateJob
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobUpdate'
+      responses:
+        '200':
+          description: Job updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Job'
+        '404':
+          description: Job not found
+    
+    delete:
+      summary: Delete a job
+      operationId: deleteJob
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Job deleted successfully
+        '404':
+          description: Job not found
+
+  /requests:
+    post:
+      summary: Create a new request
+      operationId: createRequest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestCreate'
+      responses:
+        '201':
+          description: Request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+
+  /requests/{requestId}:
+    get:
+      summary: Get request details
+      operationId: getRequest
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Request details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Request'
+        '404':
+          description: Request not found
+
+    delete:
+      summary: Delete a request
+      operationId: deleteRequest
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Request deleted successfully
+        '404':
+          description: Request not found
+
+  /requests/{requestId}/status:
+    get:
+      summary: Get request status
+      operationId: getRequestStatus
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Request status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestStatus'
+        '404':
+          description: Request not found
+
+    put:
+      summary: Update request status
+      operationId: updateRequestStatus
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestStatusUpdate'
+      responses:
+        '200':
+          description: Request status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RequestStatus'
+        '404':
+          description: Request not found
+
+  /responses:
+    post:
+      summary: Create a new response
+      operationId: createResponse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResponseCreate'
+      responses:
+        '201':
+          description: Response created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+
+  /responses/{responseId}:
+    get:
+      summary: Get response details
+      operationId: getResponse
+      parameters:
+        - name: responseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Response details retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Response'
+        '404':
+          description: Response not found
+
+    delete:
+      summary: Delete a response
+      operationId: deleteResponse
+      parameters:
+        - name: responseId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Response deleted successfully
+        '404':
+          description: Response not found
+
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Returns the health status of the service
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "ok"
+
+components:
+  schemas:
+    HTTPRequest:
+      type: object
+      required:
+        - method
+        - url
+        - headers
+      properties:
+        method:
+          type: string
+          description: HTTP method of the request
+          example: "GET"
+        url:
+          type: string
+          description: Target URL for the request
+          example: "https://api.example.com/data"
+        headers:
+          type: object
+          description: HTTP headers for the request
+          example:
+            Content-Type: "application/json"
+            Authorization: "Bearer token123"
+        body:
+          type: string
+          description: Optional request body
+          nullable: true
+          example: '{"key": "value"}'
+
+    RequestStatus:
+      type: string
+      enum: [pending, in_progress, completed, failed, retrying]
+      example: "pending"
+
+    Job:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    JobCreate:
+      type: object
+      properties:
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+
+    JobUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    Request:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        job_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    RequestCreate:
+      type: object
+      required:
+        - job_id
+      properties:
+        job_id:
+          type: string
+          format: uuid
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+
+    RequestStatusUpdate:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          $ref: '#/components/schemas/RequestStatus'
+
+    Response:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        request_id:
+          type: string
+          format: uuid
+        status_code:
+          type: integer
+          example: 200
+        response_body:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        response_time_ms:
+          type: integer
+          example: 150
+        created_at:
+          type: string
+          format: date-time
+
+    ResponseCreate:
+      type: object
+      required:
+        - request_id
+      properties:
+        request_id:
+          type: string
+          format: uuid
+        status_code:
+          type: integer
+        response_body:
+          type: string
+          nullable: true
+        error_message:
+          type: string
+          nullable: true
+        response_time_ms:
+          type: integer 

@@ -1,0 +1,13 @@
+# Worker Configuration
+worker:
+  kafka_topic: "http_requests"
+  request_timeout: 30
+  retry_attempts: 3
+
+# Proxy Configuration  
+proxies:
+  - "proxy1.example.com:8080"
+  - "proxy2.example.com:8080"
+  - "proxy3.example.com:8080"
+  - "proxy4.example.com:8080"
+  - "proxy5.example.com:8080" 
