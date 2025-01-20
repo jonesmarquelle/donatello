@@ -1,4 +1,6 @@
-# HTTP Queue Service
+[Sonnet kinda snapped on the readme, god bless her]
+
+# Donatello 🧂🌶️
 
 A scalable HTTP request queueing and processing system built with Python, FastAPI, Kafka, and PostgreSQL.
 
@@ -23,8 +25,8 @@ A scalable HTTP request queueing and processing system built with Python, FastAP
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/http_queue.git
-cd http_queue
+git clone https://github.com/jonesmarquelle/donatello.git
+cd donatello
 ```
 
 2. Set up environment variables:
@@ -58,8 +60,6 @@ pip install -r requirements.txt
 3. Run tests:
 ```bash
 .\run_tests.bat  # On Windows
-# OR
-./run_tests.sh   # On Unix-like systems
 ```
 
 ## Project Structure
