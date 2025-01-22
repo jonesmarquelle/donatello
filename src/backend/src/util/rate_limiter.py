@@ -15,6 +15,12 @@ class RateLimiter:
         """
         self.redis.close()
         
+    def reset(self):
+        """
+        Reset the rate limiter by clearing all data in Redis.
+        """
+        self.redis.flushall()
+        
     def is_allowed(self, key: str, tokens_per_second: float, bucket_size: int) -> bool:
         """
         Implements a leaky bucket rate limiter using Redis

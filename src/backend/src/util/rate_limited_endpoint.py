@@ -1,5 +1,4 @@
 import atexit
-from fastapi import Depends
 from flask import Flask, request, jsonify
 from backend.src.util.rate_limiter import RateLimiter
 import os
@@ -12,18 +11,19 @@ load_dotenv()
 REDIS_HOST=os.getenv('REDIS_HOST', 'localhost')
 REDIS_PORT=os.getenv('REDIS_PORT', 6379)
 
-
 def get_rate_limiter():
     limiter = RateLimiter(
-        redis_host=os.getenv('REDIS_HOST', 'localhost'),
-        redis_port=int(os.getenv('REDIS_PORT', 6379))
+        redis_host=REDIS_HOST,
+        redis_port=REDIS_PORT
     )
-    return limiter 
+    limiter.reset()
+    atexit.register(limiter.close)
+    return limiter
 
 #Simple echo endpoint to test rate limit
-def create_app(endpoint_key="default"):
+def create_app(endpoint_key="default", rate_limiter=None):
     app = Flask(__name__)
-    rate_limiter = get_rate_limiter()
+    rate_limiter = rate_limiter or get_rate_limiter()
 
     @app.route('/', methods=['GET', 'POST', 'PUT', 'DELETE'])
     def echo():
@@ -62,9 +62,7 @@ def create_app(endpoint_key="default"):
     return app
 
 if __name__ == '__main__':
-    rate_limiter = RateLimiter(REDIS_HOST, REDIS_PORT)
-    atexit.register(rate_limiter.close)
-    app = create_app(rate_limiter)
+    app = create_app(get_rate_limiter())
 
     port = int(os.getenv('TEST_ENDPOINT_PORT', 5001))
     app.run(host='0.0.0.0', port=port)

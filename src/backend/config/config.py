@@ -1,5 +1,5 @@
 import os
-from typing import List, Dict, Any
+from typing import Dict, Any
 import yaml
 from dotenv import load_dotenv
 

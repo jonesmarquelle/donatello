@@ -1,72 +1,66 @@
 import logging
-import os
+import random
 from unittest import mock
+import uuid
 import pytest
-import multiprocessing
-import time
-import requests
-from dotenv import load_dotenv
 from unittest.mock import Mock
 
-from backend.src.util.rate_limited_endpoint import create_app
 from backend.src.worker.worker import RequestWorker
+from backend.test.config import *
 
-load_dotenv()
-
-# Configure logging
 logger = logging.getLogger(__name__)
 
-#TODO Clean up this env variable hell
-TEST_ENDPOINT_KEY = "test_endpoint_123"
 TEST_WORKER_KEY = "test_worker_456"
 TEST_WORKER_ID = "test_worker"
-TEST_KAFKA_TOPIC = os.getenv("TEST_KAFKA_TOPIC", "http_requests")
 
-def test_process_request(setup_services):
+@pytest.mark.asyncio
+async def test_process_request(run_endpoint_server, request_store):
     """Test that worker can successfully make a request to the endpoint"""
     worker = RequestWorker(
         worker_id=TEST_WORKER_ID,
         consumer=None,
-        topics=[TEST_KAFKA_TOPIC]
+        topics=[TEST_KAFKA_TOPIC],
+        request_store=request_store
     )    
     # Test request data
     request_data = {
-        "method": "GET",
-        "url": "http://localhost:5001/",
-        "headers": {"X-Test-Header": "test"},
-        "body": None
+        "method": "post",
+        "url": TEST_ENDPOINT_URL,
+        "headers": {
+            "X-Test-Header": "test",
+            "Content-Type": "application/json"
+        },
+        "body": {"message": f"Response containing {TEST_WORKER_KEY}"}
     }
     
     # Process request
-    result = worker.process_request(request_data)
+    result = await worker.process_request(request_data)
     
     # Verify response
-    print(result)
     assert result["status_code"] == 200
     assert result["worker_id"] == TEST_WORKER_ID
     
-    # Verify the response came from our specific endpoint
-    response_data = result.get("body")
-    assert TEST_ENDPOINT_KEY in response_data
+    assert TEST_WORKER_KEY in result["body"]
 
-@mock.patch('requests.request', autospec=True)
-def test_worker_dequeue(mock_request, kafka_consumer, kafka_producer):
+@mock.patch('httpx.AsyncClient.request', autospec=True)
+@pytest.mark.asyncio
+async def test_worker_dequeue(mock_request, kafka_consumer, kafka_producer, request_store):
     """Test that worker can successfully dequeue a message from Kafka"""
 
     test_message = {
-        'id': None, 
+        'id': str(uuid.uuid4()), 
         'job_id': None, 
         'status': 'pending', 
         'http_request': {
             'method': 'GET', 
-            'url': 'http://localhost:5001/', 
+            'url': TEST_ENDPOINT_URL, 
             'headers': {"X-Test-Header": "test"},
             'body': f"Response containing {TEST_WORKER_KEY}"
         }, 
         'created_at': '2025-01-20T11:58:02.053901Z', 
         'updated_at': '2025-01-20T11:58:02.053901Z'}
 
-    # Mock the requests.request function
+    # Mock the httpx.AsyncClient.request function since we don't care about the actual request
     mock_request.return_value = Mock()
     mock_request.return_value.status_code = 200
     mock_request.return_value.headers = {"X-Test-Header": "test"}
@@ -79,11 +73,12 @@ def test_worker_dequeue(mock_request, kafka_consumer, kafka_producer):
     worker = RequestWorker(
         worker_id=TEST_WORKER_ID,
         consumer=kafka_consumer,
-        topics=[TEST_KAFKA_TOPIC]
+        topics=[TEST_KAFKA_TOPIC],
+        request_store=request_store
     )
     
     # Process message from queue
-    result = worker.run(test_mode=True)
+    result = await worker.run(test_mode=True)
     
     # Verify response
     logger.debug(f"DequeuedResult: {result}")
@@ -92,30 +87,40 @@ def test_worker_dequeue(mock_request, kafka_consumer, kafka_producer):
     assert result["headers"]["X-Test-Header"] == "test"
     assert TEST_WORKER_KEY in result["body"]
 
-# Create endpoint app with a unique key for testing
-def run_endpoint():
-    endpoint_app = create_app(endpoint_key=TEST_ENDPOINT_KEY)
-    endpoint_app.run(host='0.0.0.0', port=5001)
+@pytest.mark.asyncio
+async def test_cleanup_request(kafka_producer, kafka_consumer, request_store):
+    """Test that worker can successfully cleanup a request from Redis"""
+    request_id = str(random.randint(1, 1000000))
+    test_message = {
+        'id': request_id, 
+        'job_id': None, 
+        'status': 'pending', 
+        'http_request': {
+            'method': 'GET', 
+            'url': TEST_ENDPOINT_URL, 
+            'headers': {"X-Test-Header": "test"},
+            'body': f"Response containing {TEST_WORKER_KEY}"
+        }, 
+        'created_at': '2025-01-20T11:58:02.053901Z', 
+        'updated_at': '2025-01-20T11:58:02.053901Z'}
 
-@pytest.fixture(scope="module")
-def setup_services():
-    # Start echo endpoint in a separate process
-    endpoint_process = multiprocessing.Process(target=run_endpoint)
-    endpoint_process.start()
-    
-    # Wait for service to start
-    time.sleep(2)
+    # Add request to Redis
+    request_store.store_request(request_id, test_message['http_request'])
 
-    try:
-        endpoint_health = requests.get("http://localhost:5001/health", timeout=10)
-        assert endpoint_health.status_code == 200, "Endpoint not running"
-        assert endpoint_health.json()["endpoint_key"] == TEST_ENDPOINT_KEY, "Wrong endpoint responding"
-    except Exception as e:
-        endpoint_process.terminate()
-        raise e
+    #Create Kafka producer
+    with kafka_producer as producer:
+        producer.publish(test_message)
+
+    # Create worker instance
+    worker = RequestWorker(
+        worker_id=TEST_WORKER_ID,
+        consumer=kafka_consumer,
+        topics=[TEST_KAFKA_TOPIC],
+        request_store=request_store
+    )
     
-    yield
+    # Process message from queue
+    result = await worker.run(test_mode=True)
     
-    # Cleanup
-    endpoint_process.terminate()
-    endpoint_process.join()
+    # Verify request was cleaned up from Redis
+    assert request_store.get_request(request_id) is None

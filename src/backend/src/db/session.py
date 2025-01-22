@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 import asyncpg
 from fastapi import FastAPI, Request
-from pydantic import PostgresDsn
 
 class DatabasePool:
     def __init__(self, dsn: str):

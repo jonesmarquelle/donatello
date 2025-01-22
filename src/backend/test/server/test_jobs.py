@@ -1,20 +1,11 @@
-import os
-import logging
 import pytest
 import pytest_asyncio
-from dotenv import load_dotenv
 from fastapi import FastAPI
 from httpx import AsyncClient, ASGITransport
 import uuid
 from backend.src.server.jobs.routes import router
 from backend.src.db.session import DatabasePool, get_db_pool
 from typing import AsyncGenerator
-
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-
-load_dotenv()
-TEST_DB_URL = os.getenv("TEST_DATABASE_URL")
 
 @pytest_asyncio.fixture(scope="module")
 def app() -> FastAPI:

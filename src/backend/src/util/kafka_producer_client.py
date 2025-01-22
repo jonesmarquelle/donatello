@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from kafka import KafkaProducer
+from kafka.admin import KafkaAdminClient
 from kafka.errors import KafkaError
 import json
 import logging
@@ -63,6 +64,10 @@ class KafkaProducerClient:
         except Exception as e:
             logger.error(f"Failed to publish message to topic {self.topic}: {str(e)}")
             raise
+
+    def clear_topic(self) -> None:
+        admin_client = KafkaAdminClient(bootstrap_servers=self.config['bootstrap_servers'])
+        admin_client.delete_topics([self.topic])
 
     def close(self) -> None:
         """Close the Kafka producer connection."""

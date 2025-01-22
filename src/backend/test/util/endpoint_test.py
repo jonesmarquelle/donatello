@@ -1,46 +1,23 @@
 import logging
+import httpx
 import pytest
-import time
-import multiprocessing
-
-import requests
-from backend.src.util.rate_limited_endpoint import create_app as create_endpoint_app
 import aiohttp
 import asyncio
 
+from backend.test.config import TEST_ENDPOINT_KEY, TEST_ENDPOINT_URL
+
 logger = logging.getLogger(__name__)
-
-# Create endpoint app with a unique key for testing
-TEST_ENDPOINT_KEY = "test_endpoint_123"
-endpoint_app = create_endpoint_app(endpoint_key=TEST_ENDPOINT_KEY)
-
-def run_endpoint():
-    endpoint_app.run(host='0.0.0.0', port=5001)
-
-@pytest.fixture(scope="module")
-def setup_services():
-    # Start mock server in a separate process
-    endpoint_process = multiprocessing.Process(target=run_endpoint)
-    endpoint_process.start()
-    
-    # Wait for services to start
-    time.sleep(2)
-    
-    yield
-    
-    # Cleanup
-    endpoint_process.terminate()
-    endpoint_process.join()
+logger.setLevel(logging.DEBUG)
 
 # Test that the endpoint can rate limit requests using Redis
-def test_rate_limiting(setup_services):    
+def test_rate_limiting(run_endpoint_server):    
     async def run_requests():
         async with aiohttp.ClientSession() as session:
             tasks = []
             for _ in range(50):
                 tasks.append(
                     session.get(
-                        "http://localhost:5001/",
+                        TEST_ENDPOINT_URL,
                     )
                 )
             responses = await asyncio.gather(*tasks)
@@ -52,14 +29,19 @@ def test_rate_limiting(setup_services):
     assert 429 in responses
 
 # Test that the endpoint can handle different HTTP methods
-def test_different_http_methods(setup_services):
+@pytest.mark.asyncio
+async def test_different_http_methods(run_endpoint_server):
     methods = ["GET", "POST", "PUT", "DELETE"]
+    
     for method in methods:
-        response = requests.request(method, "http://localhost:5001/")
-        assert response.status_code == 200
+        async with httpx.AsyncClient() as client:
+            response = await client.request(method, TEST_ENDPOINT_URL)
+            assert response.status_code == 200
 
 # Test that the endpoint key is correctly passed through
-def test_endpoint_key(setup_services):
-    response = requests.get("http://localhost:5001/")
-    assert response.json()["endpoint_key"] == TEST_ENDPOINT_KEY
+@pytest.mark.asyncio
+async def test_endpoint_key(run_endpoint_server):
+    async with httpx.AsyncClient() as client:
+        response = await client.get(TEST_ENDPOINT_URL)
+        assert response.json()["endpoint_key"] == TEST_ENDPOINT_KEY
 

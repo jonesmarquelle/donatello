@@ -7,6 +7,7 @@ from uuid import UUID
 import uuid
 from backend.src.util.kafka_producer_client import KafkaProducerClient, get_kafka_producer
 from backend.src.db.session import get_db_pool, DatabasePool
+from backend.src.util.request_store import RequestStore, get_request_store
 import logging
 
 logger = logging.getLogger(__name__)
@@ -39,7 +40,8 @@ class Request(BaseModel):
 async def create_request(
     request: RequestCreate,
     db_pool: DatabasePool = Depends(get_db_pool),
-    kafka_producer: KafkaProducerClient = Depends(get_kafka_producer)
+    kafka_producer: KafkaProducerClient = Depends(get_kafka_producer),
+    request_store: RequestStore = Depends(get_request_store)
 ) -> Request:
     """Create a new request"""
     try:
@@ -61,11 +63,16 @@ async def create_request(
 
         logger.info(f"Request created in database: {result}")
         
+        # Store HTTP request data in Redis
+        request_store.store_request(
+            str(request_id),
+            jsonable_encoder(request.http_request)
+        )
+        
         request_data = Request(
             id=result[0],
             job_id=result[1],
             status=result[2],
-            #TODO Figure out where to store this if we want to keep it in the database
             http_request=request.http_request,
             created_at=result[3],
             updated_at=result[4]
@@ -83,7 +90,8 @@ async def create_request(
 @router.get("/{request_id}")
 async def get_request(
     request_id: UUID,
-    db_pool: DatabasePool = Depends(get_db_pool)
+    db_pool: DatabasePool = Depends(get_db_pool),
+    request_store: RequestStore = Depends(get_request_store)
 ) -> Request:
     """Get request details"""
     try:
@@ -99,14 +107,18 @@ async def get_request(
                 detail=f"Request with id {request_id} not found"
             )
             
-        # TODO: Retrieve http_request data from appropriate storage
-        # For now, using a placeholder empty HTTPRequest
-        http_request = HTTPRequest(
-            method="",
-            url="",
-            headers={},
-            body=None
-        )
+        # Retrieve HTTP request data from Redis
+        http_request_data = request_store.get_request(str(request_id))
+        if http_request_data:
+            http_request = HTTPRequest(**http_request_data)
+        else:
+            # If not found in Redis, return empty request
+            http_request = HTTPRequest(
+                method="",
+                url="",
+                headers={},
+                body=None
+            )
             
         return Request(
             id=result[0],
@@ -156,13 +168,19 @@ async def update_request_status(request_id: UUID, status_update: RequestStatusUp
         raise HTTPException(status_code=500, detail=f"Failed to update request status: {str(e)}")
 
 @router.delete("/{request_id}", status_code=204)
-async def delete_request(request_id: UUID, db_pool: DatabasePool = Depends(get_db_pool)) -> None:
+async def delete_request(
+    request_id: UUID,
+    db_pool: DatabasePool = Depends(get_db_pool),
+    request_store: RequestStore = Depends(get_request_store)
+) -> None:
     """Delete a request"""
     try:
         async with db_pool.acquire() as conn:
             await conn.execute('''
                 DELETE FROM requests WHERE id = $1
             ''', request_id)
+        # Also delete from Redis
+        request_store.delete_request(str(request_id))
         return None
     except Exception as e:
         logger.error(f"Error deleting request: {str(e)}")
